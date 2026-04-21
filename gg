@@ -1,0 +1,113 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace LibrarySystem
+{
+    public interface IItem
+    {
+        string Id { get; }
+        string Title { get; }
+        bool IsAvailable { get; set; }
+    }
+
+    public abstract class LibraryItem : IItem
+    {
+        public string Id { get; }
+        public string Title { get; }
+        public bool IsAvailable { get; set; } = true;
+
+        protected LibraryItem(string id, string title)
+        {
+            Id = id;
+            Title = title;
+        }
+
+        public abstract void DisplayInfo();
+    }
+
+    public class Book : LibraryItem
+    {
+        public string Author { get; }
+        public int Pages { get; }
+
+        public Book(string id, string title, string author, int pages) 
+            : base(id, title)
+        {
+            Author = author;
+            Pages = pages;
+        }
+
+        public override void DisplayInfo()
+        {
+            Console.WriteLine($"[Book] ID: {Id}, Title: {Title}, Author: {Author}, Pages: {Pages}");
+        }
+    }
+
+    public class Magazine : LibraryItem
+    {
+        public int IssueNumber { get; }
+
+        public Magazine(string id, string title, int issue) 
+            : base(id, title)
+        {
+            IssueNumber = issue;
+        }
+
+        public override void DisplayInfo()
+        {
+            Console.WriteLine($"[Magazine] ID: {Id}, Title: {Title}, Issue: {IssueNumber}");
+        }
+    }
+
+    public class LibraryManager<T> where T : LibraryItem
+    {
+        private readonly List<T> _items = new List<T>();
+
+        public void AddItem(T item) => _items.Add(item);
+
+        public T GetItemById(string id) => _items.FirstOrDefault(i => i.Id == id);
+
+        public IEnumerable<T> GetAvailableItems() => _items.Where(i => i.IsAvailable);
+
+        public void DisplayAll()
+        {
+            foreach (var item in _items)
+            {
+                item.DisplayInfo();
+            }
+        }
+    }
+
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            var library = new LibraryManager<LibraryItem>();
+
+            library.AddItem(new Book("B001", "The C# Guide", "Microsoft", 500));
+            library.AddItem(new Book("B002", "Clean Code", "Robert Martin", 464));
+            library.AddItem(new Magazine("M001", "Tech Monthly", 102));
+
+            Console.WriteLine("All Items:");
+            library.DisplayAll();
+
+            Console.WriteLine("\nProcessing Transaction...");
+            await Task.Delay(1000);
+
+            var book = library.GetItemById("B001");
+            if (book != null)
+            {
+                book.IsAvailable = false;
+                Console.WriteLine($"Borrowed: {book.Title}");
+            }
+
+            Console.WriteLine("\nAvailable Items:");
+            foreach (var item in library.GetAvailableItems())
+            {
+                Console.WriteLine(item.Title);
+            }
+        }
+    }
+}
