@@ -1,0 +1,15 @@
+using System;
+
+Console.WriteLine("Hello, World!");
+
+string name = "User";
+int hour = DateTime.Now.Hour;
+
+if (hour < 12)
+{
+    Console.WriteLine($"Good morning, {name}!");
+}
+else
+{
+    Console.WriteLine($"Good afternoon, {name}!");
+}
