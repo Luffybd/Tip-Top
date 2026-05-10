@@ -1,0 +1,248 @@
+package com.library.system;
+
+import java.io.*;
+import java.util.*;
+
+// ==========================================
+// 1. CUSTOM EXCEPTIONS
+// ==========================================
+class ItemNotFoundException extends Exception {
+    public ItemNotFoundException(String message) { super(message); }
+}
+
+class LoanLimitExceededException extends Exception {
+    public LoanLimitExceededException(String message) { super(message); }
+}
+
+// ==========================================
+// 2. CORE DOMAIN MODELS (Abstraction & OOP)
+// ==========================================
+abstract class LibraryItem implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private String id;
+    private String title;
+    private boolean isBorrowed;
+
+    public LibraryItem(String id, String title) {
+        this.id = id;
+        this.title = title;
+        this.isBorrowed = false;
+    }
+
+    public String getId() { return id; }
+    public String getTitle() { return title; }
+    public boolean isBorrowed() { return isBorrowed; }
+    public void setBorrowed(boolean borrowed) { isBorrowed = borrowed; }
+
+    public abstract void displayDetails();
+}
+
+class Book extends LibraryItem {
+    private String author;
+    private String isbn;
+
+    public Book(String id, String title, String author, String isbn) {
+        super(id, title);
+        this.author = author;
+        this.isbn = isbn;
+    }
+
+    @Override
+    public void displayDetails() {
+        System.out.printf("[Book] ID: %s | Title: %s | Author: %s | ISBN: %s | Available: %b%n",
+                getId(), getTitle(), author, isbn, !isBorrowed());
+    }
+}
+
+class Magazine extends LibraryItem {
+    private int issueNumber;
+
+    public Magazine(String id, String title, int issueNumber) {
+        super(id, title);
+        this.issueNumber = issueNumber;
+    }
+
+    @Override
+    public void displayDetails() {
+        System.out.printf("[Magazine] ID: %s | Title: %s | Issue No: %d | Available: %b%n",
+                getId(), getTitle(), issueNumber, !isBorrowed());
+    }
+}
+
+// ==========================================
+// 3. USER MANAGEMENT
+// ==========================================
+class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private String userId;
+    private String name;
+    private List<String> borrowedItemIds;
+    private static final int MAX_LOAN_LIMIT = 3;
+
+    public User(String userId, String name) {
+        this.userId = userId;
+        this.name = name;
+        this.borrowedItemIds = new ArrayList<>();
+    }
+
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public List<String> getBorrowedItemIds() { return borrowedItemIds; }
+
+    public void borrowItem(String itemId) throws LoanLimitExceededException {
+        if (borrowedItemIds.size() >= MAX_LOAN_LIMIT) {
+            throw new LoanLimitExceededException("User has reached their borrowing limit of " + MAX_LOAN_LIMIT + " items.");
+        }
+        borrowedItemIds.add(itemId);
+    }
+
+    public void returnItem(String itemId) {
+        borrowedItemIds.remove(itemId);
+    }
+}
+
+// ==========================================
+// 4. SERVICE LAYER (Business Logic & File I/O)
+// ==========================================
+class LibraryService {
+    private Map<String, LibraryItem> inventory = new HashMap<>();
+    private Map<String, User> users = new HashMap<>();
+    private final String DATA_FILE = "library_data.dat";
+
+    public void addItem(LibraryItem item) {
+        inventory.put(item.getId(), item);
+    }
+
+    public void registerUser(User user) {
+        users.put(user.getUserId(), user);
+    }
+
+    public void displayInventory() {
+        if (inventory.isEmpty()) {
+            System.out.println("The library inventory is completely empty.");
+            return;
+        }
+        inventory.values().forEach(LibraryItem::displayDetails);
+    }
+
+    public void checkOutItem(String userId, String itemId) throws ItemNotFoundException, LoanLimitExceededException {
+        User user = users.get(userId);
+        LibraryItem item = inventory.get(itemId);
+
+        if (user == null) throw new ItemNotFoundException("User registration record not found.");
+        if (item == null) throw new ItemNotFoundException("Library item entry missing from inventory.");
+        if (item.isBorrowed()) throw new LoanLimitExceededException("This exact resource is currently checked out.");
+
+        user.borrowItem(itemId);
+        item.setBorrowed(true);
+        System.out.println("Success: Item checked out successfully!");
+    }
+
+    public void checkInItem(String userId, String itemId) throws ItemNotFoundException {
+        User user = users.get(userId);
+        LibraryItem item = inventory.get(itemId);
+
+        if (user == null) throw new ItemNotFoundException("User profile not found.");
+        if (item == null) throw new ItemNotFoundException("Item catalog record missing.");
+
+        if (!user.getBorrowedItemIds().contains(itemId)) {
+            throw new ItemNotFoundException("This item is not tied to this user's account active logs.");
+        }
+
+        user.returnItem(itemId);
+        item.setBorrowed(false);
+        System.out.println("Success: Item checked back into inventory!");
+    }
+
+    // Binary Serialization File Saving Logic
+    public void saveData() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(DATA_FILE))) {
+            oos.writeObject(inventory);
+            oos.writeObject(users);
+            System.out.println("System data saved safely to local disk.");
+        } catch (IOException e) {
+            System.out.println("Critical Error saving program files: " + e.getMessage());
+        }
+    }
+
+    // Binary Serialization Loading Logic
+    @SuppressWarnings("unchecked")
+    public void loadData() {
+        File file = new File(DATA_FILE);
+        if (!file.exists()) {
+            System.out.println("No backup archive found. Instantiating fresh system databases.");
+            return;
+        }
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+            inventory = (Map<String, LibraryItem>) ois.readObject();
+            users = (Map<String, User>) ois.readObject();
+            System.out.println("Historical library transaction data parsed and loaded successfully.");
+        } catch (Exception e) {
+            System.out.println("Corrupt database file detected. Initializing fresh runtime storage.");
+        }
+    }
+}
+
+// ==========================================
+// 5. APPLICATION RUNTIME ENGINE
+// ==========================================
+public class Main {
+    public static void main(String[] args) {
+        LibraryService library = new LibraryService();
+        library.loadData();
+        
+        // Populate base records dynamically if data is unarchived
+        library.addItem(new Book("B01", "Clean Code", "Robert C. Martin", "978-0132350884"));
+        library.addItem(new Book("B02", "Effective Java", "Joshua Bloch", "978-0134685991"));
+        library.addItem(new Magazine("M01", "Java Magazine Issue #42", 42));
+        library.registerUser(new User("U01", "Alice Smith"));
+        library.registerUser(new User("U02", "Bob Jones"));
+
+        Scanner scanner = new Scanner(System.in);
+        boolean processing = true;
+
+        System.out.println("=== ENTERPRISE COMMAND LINE LIBRARY SYSTEMS INITIALIZED ===");
+
+        while (processing) {
+            System.out.println("\nOptions: [1] View Inventory | [2] Checkout Item | [3] Return Item | [4] Exit & Backup");
+            System.out.print("Select an operational flag: ");
+            String action = scanner.nextLine();
+
+            switch (action) {
+                case "1":
+                    library.displayInventory();
+                    break;
+                case "2":
+                    System.out.print("Enter User Identification Key: ");
+                    String uId = scanner.nextLine();
+                    System.out.print("Enter Inventory Item Identifier: ");
+                    String iId = scanner.nextLine();
+                    try {
+                        library.checkOutItem(uId, iId);
+                    } catch (Exception e) {
+                        System.out.println("Process Interrupted: " + e.getMessage());
+                    }
+                    break;
+                case "3":
+                    System.out.print("Enter User Identification Key: ");
+                    String rUserId = scanner.nextLine();
+                    System.out.print("Enter Inventory Item Identifier: ");
+                    String rItemId = scanner.nextLine();
+                    try {
+                        library.checkInItem(rUserId, rItemId);
+                    } catch (Exception e) {
+                        System.out.println("Process Interrupted: " + e.getMessage());
+                    }
+                    break;
+                case "4":
+                    library.saveData();
+                    processing = false;
+                    System.out.println("All threads cleanly closed down. Goodbye.");
+                    break;
+                default:
+                    System.out.println("Invalid operational command selected.");
+            }
+        }
+        scanner.close();
+    }
+}
