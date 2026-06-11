@@ -12,4 +12,4 @@ if (hour < 12)
 else
 {
     Console.WriteLine($"Good afternoon, {name}!");
-}
+};
